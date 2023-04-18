@@ -50,9 +50,6 @@ you should only open one connection
     - [ ] Observation (Air) (obs_air)
     - [ ] Observation (Sky) (obs_sky)
     - [x] Observation (Tempest) (obs_st)
-    - [ ] Device Status (device_status)
-    - [ ] Hub Status (hub_status) 
-    - [ ] Radio stats
 
 Pull requests are welcome.
 
