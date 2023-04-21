@@ -6,7 +6,7 @@ weatherflow is a Go module for streaming rapid observations from the
 ## Installation
 
 ```
-go get github.com/tris/weatherflow
+go get -u github.com/tris/weatherflow
 ```
 
 ## Example
