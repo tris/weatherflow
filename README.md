@@ -9,34 +9,40 @@ weatherflow is a Go module for streaming rapid observations from the
 go get github.com/tris/weatherflow
 ```
 
-## Usage
+## Example
 
 ```go
-client, err := weatherflow.NewClient(apiToken, deviceID, log.Printf)
-if err != nil {
-	panic(err)
-}
+import (
+	"fmt"
+	"log"
+	"github.com/tris/weatherflow"
+)
 
-go client.Start(func(msg weatherflow.Message) {
-	switch m := msg.(type) {
-	case *weatherflow.MessageObsSt:
-		fmt.Printf("Observation: %+v\n", m)
-	case *weatherflow.MessageRapidWind:
-		fmt.Printf("Rapid wind: %+v\n", m)
+func main() {
+	apiToken := "..."
+	deviceIDs := []int{...}
+
+	client, err := weatherflow.NewClient(apiToken, deviceIDs, log.Printf)
+	if err != nil {
+		panic(err)
 	}
-})
 
-time.Sleep(30 * time.Second)
+	client.Start(func(msg weatherflow.Message) {
+		switch m := msg.(type) {
+		case *weatherflow.MessageObsSt:
+			fmt.Printf("Observation: %+v\n", m)
+		case *weatherflow.MessageRapidWind:
+			fmt.Printf("Rapid wind: %+v\n", m)
+		}
+	})
 
-client.Stop()
+	time.Sleep(30 * time.Second)
+
+	client.Stop()
+}
 ```
 
 ## Limitations
-
-- Only one device ID is supported per connection
-    - Note that per WeatherFlow's
-[WebSocket Reference](https://weatherflow.github.io/Tempest/api/ws.html#other-useful-information),
-you should only open one connection
 
 - Only Tempest and Rapid Wind observations are passed:
     - [ ] Acknowledgement (ack)

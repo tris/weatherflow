@@ -117,7 +117,7 @@ func TestNewClient(t *testing.T) {
 	defer stopServer()
 
 	// Create client
-	client, err := weatherflow.NewClient("your_token", 12345, t.Logf)
+	client, err := weatherflow.NewClient("your_token", []int{12345}, t.Logf)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -128,8 +128,8 @@ func TestNewClient(t *testing.T) {
 	// Create a channel to receive messages
 	msgCh := make(chan weatherflow.Message)
 
-	// Start the client in a separate goroutine
-	go client.Start(func(msg weatherflow.Message) {
+	// Start the client
+	client.Start(func(msg weatherflow.Message) {
 		msgCh <- msg
 	})
 
