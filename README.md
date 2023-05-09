@@ -19,13 +19,9 @@ import (
 )
 
 func main() {
-	apiToken := "..."
-	deviceIDs := []int{...}
+	client := weatherflow.NewClient("your-token-here", log.Printf)
 
-	client, err := weatherflow.NewClient(apiToken, deviceIDs, log.Printf)
-	if err != nil {
-		panic(err)
-	}
+	client.AddDevice(12345)
 
 	client.Start(func(msg weatherflow.Message) {
 		switch m := msg.(type) {

@@ -4,8 +4,10 @@ package weatherflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"nhooyr.io/websocket"
@@ -14,34 +16,40 @@ import (
 
 const (
 	wfURL          = "wss://ws.weatherflow.com/swd/data?token=%s"
-	initialBackoff = 1	// seconds
+	initialBackoff = 2 // seconds (don't set below 2)
 	maxBackoff     = 32
 )
 
 // Client represents a client for the WeatherFlow Smart Weather API.
 type Client struct {
-	deviceIDs []int
-	url      string
-	logf     Logf
-	stopCh   chan struct{}
-	conn     *websocket.Conn
-	errors   int
+	deviceIDs map[int]struct{}
+	url       string
+	logf      Logf
+	conn      *websocket.Conn
+	errors    int
+	ctx       context.Context
+	cancel    context.CancelFunc
+	mu        sync.RWMutex
 }
 
-// NewClient creates a new Client with the given API token, device IDs, and an
-// optional log function (if nil, logs will be discarded).
-func NewClient(token string, deviceIDs []int, logf Logf) (*Client, error) {
+// NewClient creates a new Client with the given API token, message handler,
+// and an optional log function (if nil, logs will be discarded).
+func NewClient(token string, logf Logf) *Client {
 	if logf == nil {
 		logf = func(format string, args ...interface{}) {} // discard
 	}
-	client := &Client{
-		deviceIDs: deviceIDs,
-		url:      fmt.Sprintf(wfURL, token),
-		logf:     logf,
-		stopCh:   make(chan struct{}),
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	c := &Client{
+		deviceIDs: make(map[int]struct{}),
+		url:       fmt.Sprintf(wfURL, token),
+		logf:      logf,
+		ctx:       ctx,
+		cancel:    cancel,
 	}
 
-	return client, nil
+	return c
 }
 
 // SetURL overrides the server URL (for testing).
@@ -49,63 +57,50 @@ func (c *Client) SetURL(url string) {
 	c.url = url
 }
 
-// handleBackoff sleeps for up to maxBackoff seconds to avoid overwhelming
-// the API when it's having issues.
-func (c *Client) handleBackoff() {
-	// No backoff if we haven't gotten any errors yet.
-	if c.errors == 0 {
-		return
-	}
+// AddDevice subscribes to wind events for a device ID.
+func (c *Client) AddDevice(id int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	backoff := math.Min(math.Pow(initialBackoff, float64(c.errors)), maxBackoff)
-	c.logf("sleeping for %d sec after %d error(s)", backoff, c.errors)
-	time.Sleep(time.Duration(backoff) * time.Second)
+	c.deviceIDs[id] = struct{}{}
+
+	if c.conn != nil {
+		c.sendListenStart(id)
+	}
 }
 
-// sendListenStart subscribes to wind observation events.
-func (c *Client) sendListenStart(ctx context.Context, id int) error {
-	startMessage := map[string]interface{}{
-		"type":      "listen_start",
-		"device_id": id,
-		"id":        "",
-	}
+// RemoveDevice unsubscribes from wind events for a device ID.
+func (c *Client) RemoveDevice(id int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	rapidStartMessage := map[string]interface{}{
-		"type":      "listen_rapid_start",
-		"device_id": id,
-		"id":        "",
-	}
+	delete(c.deviceIDs, id)
 
-	err := wsjson.Write(ctx, c.conn, startMessage)
-	if err != nil {
-		return err
+	if c.conn != nil {
+		c.sendListenStop(id)
 	}
+}
 
-	err = wsjson.Write(ctx, c.conn, rapidStartMessage)
-	if err != nil {
-		return err
-	}
-
-	return nil
+// DeviceCount returns a count of monitored devices.
+func (c *Client) DeviceCount() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.deviceIDs)
 }
 
 // Start initiates a WebSocket connection to the WeatherFlow server and processes
 // incoming messages.
 func (c *Client) Start(onMessage func(Message)) {
 	go func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		go func() {
-			<-c.stopCh
-			cancel()
-		}()
+		defer c.cancel()
 
 		for {
 			select {
-			case <-ctx.Done():
+			case <-c.ctx.Done():
 				// Close the WebSocket connection and return
+				// Probably redundant?
 				if c.conn != nil {
+					c.logf("Disconnecting from WeatherFlow")
 					_ = c.conn.Close(websocket.StatusNormalClosure, "Closing connection")
 				}
 				return
@@ -113,7 +108,7 @@ func (c *Client) Start(onMessage func(Message)) {
 			default:
 				c.handleBackoff()
 				c.logf("Connecting to WeatherFlow")
-				conn, _, err := websocket.Dial(ctx, c.url, nil)
+				conn, _, err := websocket.Dial(c.ctx, c.url, nil)
 				if err != nil {
 					c.logf("Error connecting to WeatherFlow: %v", err)
 					c.errors++
@@ -123,21 +118,20 @@ func (c *Client) Start(onMessage func(Message)) {
 				c.conn = conn
 
 				// Subscribe to wind events
-				for _, id := range c.deviceIDs {
-					err = c.sendListenStart(ctx, id)
-					if err != nil {
-						c.logf("Error sending start message: %v", err)
-						c.errors++
-						continue
-					}
+				c.mu.Lock()
+				for id, _ := range c.deviceIDs {
+					c.sendListenStart(id)
 				}
+				c.mu.Unlock()
 
 				// Read messages from the WebSocket connection
 				for {
-					msgType, msg, err := conn.Read(ctx)
+					msgType, msg, err := conn.Read(c.ctx)
 					if err != nil {
-						c.logf("Error reading message: %v", err)
-						c.errors++
+						if !errors.Is(err, context.Canceled) {
+							c.logf("Error reading message: %v", err)
+							c.errors++
+						}
 						break
 					}
 
@@ -163,13 +157,82 @@ func (c *Client) Start(onMessage func(Message)) {
 						c.errors = 1
 					}
 				}
-
-				c.logf("Connection lost, attempting to reconnect...")
 			}
 		}
 	}()
 }
 
+// handleBackoff sleeps for up to maxBackoff seconds to avoid overwhelming
+// the API when it's having issues.
+func (c *Client) handleBackoff() {
+	// No backoff if we haven't gotten any errors yet.
+	if c.errors == 0 {
+		return
+	}
+
+	backoff := math.Min(math.Pow(initialBackoff, float64(c.errors)), maxBackoff)
+	c.logf("sleeping for %.0f sec after %d error(s)", backoff, c.errors)
+	time.Sleep(time.Duration(backoff) * time.Second)
+}
+
+// sendListenStart subscribes to wind observation events.
+func (c *Client) sendListenStart(id int) {
+	c.logf("Listening to wind events from device %d", id)
+
+	startMessage := map[string]interface{}{
+		"type":      "listen_start",
+		"device_id": id,
+		"id":        "",
+	}
+
+	rapidStartMessage := map[string]interface{}{
+		"type":      "listen_rapid_start",
+		"device_id": id,
+		"id":        "",
+	}
+
+	err := wsjson.Write(c.ctx, c.conn, startMessage)
+	if err != nil {
+		c.logf("Error sending start message: %v", err)
+		c.errors++
+	}
+
+	err = wsjson.Write(c.ctx, c.conn, rapidStartMessage)
+	if err != nil {
+		c.logf("Error sending rapid start message: %v", err)
+		c.errors++
+	}
+}
+
+// sendListenStop unsubscribes from wind observation events.
+func (c *Client) sendListenStop(id int) {
+	c.logf("Stopping wind events from device %d", id)
+
+	stopMessage := map[string]interface{}{
+		"type":      "listen_stop",
+		"device_id": id,
+		"id":        "",
+	}
+
+	rapidStopMessage := map[string]interface{}{
+		"type":      "listen_rapid_stop",
+		"device_id": id,
+		"id":        "",
+	}
+
+	err := wsjson.Write(c.ctx, c.conn, stopMessage)
+	if err != nil {
+		c.logf("Error sending stop message: %v", err)
+		c.errors++
+	}
+
+	err = wsjson.Write(c.ctx, c.conn, rapidStopMessage)
+	if err != nil {
+		c.logf("Error sending rapid stop message: %v", err)
+		c.errors++
+	}
+}
+
 func (c *Client) Stop() {
-	close(c.stopCh)
+	c.cancel()
 }
