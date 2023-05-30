@@ -19,7 +19,7 @@ import (
 )
 
 func main() {
-	client := weatherflow.NewClient("your-token-here", log.Printf)
+	client := weatherflow.NewClient("your-token-here", nil, log.Printf)
 
 	client.AddDevice(12345)
 

@@ -6,7 +6,6 @@ import (
 )
 
 type Message interface {
-	GetDeviceID() int
 	GetType() string
 }
 
@@ -25,6 +24,15 @@ type MessageRapidWind struct {
 	Type         string        `json:"type"`
 	HubSN        string        `json:"hub_sn"`
 	Ob           RapidWindData `json:"ob"`
+}
+
+type MessageConnectionOpened struct {
+	Type string `json:"type"`
+}
+
+type MessageAck struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
 }
 
 type ObsStStatus struct {
@@ -134,19 +142,19 @@ func (rw *RapidWindData) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (w *MessageObsSt) GetDeviceID() int {
-	return w.DeviceID
-}
-
 func (w *MessageObsSt) GetType() string {
 	return w.Type
 }
 
-func (w *MessageRapidWind) GetDeviceID() int {
-	return w.DeviceID
+func (w *MessageRapidWind) GetType() string {
+	return w.Type
 }
 
-func (w *MessageRapidWind) GetType() string {
+func (w *MessageConnectionOpened) GetType() string {
+	return w.Type
+}
+
+func (w *MessageAck) GetType() string {
 	return w.Type
 }
 
@@ -172,9 +180,13 @@ func UnmarshalMessage(data []byte) (Message, error) {
 		err := json.Unmarshal(data, &message)
 		return &message, err
 	case "connection_opened":
-		return nil, nil
+		var message MessageConnectionOpened
+		err := json.Unmarshal(data, &message)
+		return &message, err
 	case "ack":
-		return nil, nil
+		var message MessageAck
+		err := json.Unmarshal(data, &message)
+		return &message, err
 	default:
 		return nil, fmt.Errorf("unsupported message type: %s", messageType)
 	}

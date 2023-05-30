@@ -117,7 +117,7 @@ func TestNewClient(t *testing.T) {
 	defer stopServer()
 
 	// Create client
-	client := weatherflow.NewClient("your_token", t.Logf)
+	client := weatherflow.NewClient("your_token", nil, t.Logf)
 	client.AddDevice(12345)
 
 	// Override URL to point to our mock server
