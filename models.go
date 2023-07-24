@@ -7,6 +7,7 @@ import (
 
 type Message interface {
 	GetType() string
+	GetDeviceID() (int, bool)
 }
 
 type MessageObsSt struct {
@@ -156,6 +157,22 @@ func (w *MessageConnectionOpened) GetType() string {
 
 func (w *MessageAck) GetType() string {
 	return w.Type
+}
+
+func (w *MessageObsSt) GetDeviceID() (int, bool) {
+	return w.DeviceID, true
+}
+
+func (w *MessageRapidWind) GetDeviceID() (int, bool) {
+	return w.DeviceID, true
+}
+
+func (w *MessageConnectionOpened) GetDeviceID() (int, bool) {
+	return -1, false
+}
+
+func (w *MessageAck) GetDeviceID() (int, bool) {
+	return -1, false
 }
 
 func UnmarshalMessage(data []byte) (Message, error) {
