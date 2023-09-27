@@ -53,27 +53,11 @@ func main() {
     - [ ] Observation (Sky) (obs_sky)
     - [x] Observation (Tempest) (obs_st)
 
-## Known issues
+## TODO
 
-- `obs_st` messages are unreliable.  In particular, if you issue `listen_start`
-  for the same device on two separate WebSocket connections, both will reply with
-  `ack` but only the first connection will receive any `obs_st` messages, save for
-  an initial reading from cache.
-
-  You can verify this behavior using `wscat` (run two copies):
-
-  ```bash
-  wscat -c wss://ws.weatherflow.com/swd/data?token=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx -x '{"type":"listen_start","device_id":123456,"id":""}' -w 180
-  ```
-
-  This does not seem to be an issue for `rapid_wind` messages.
-
-  Note that `Add()` will issue both `listen_start` and `listen_rapid_start`;
-  there is currently no way to listen only to one type.  (I may change this in the
-  future if WeatherFlow says the aforementioned behavior is intentional.)
-
-  Further details:
-  [WebSocket API issue with obs_st messages](https://community.weatherflow.com/t/websocket-api-issue-with-obs-st-messages/21078/1)
+- Track delayed observations (occasionally the API will emit several `obs_st` in a batch which are up to 10 minutes old)
+- Track missing observations
+- Track duplicate observations (occasionally the API will emit up to four rapid observations for the same timestamp)
 
 ## Credit
 
