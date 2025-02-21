@@ -16,7 +16,7 @@ func TestUnmarshalWeatherMessage(t *testing.T) {
 	}{
 		{
 			name:  "obs_st message",
-			input: `{"status":{"status_code":0,"status_message":"SUCCESS"},"device_id":121037,"type":"obs_st","source":"cache","summary":{"pressure_trend":"steady","strike_count_1h":0,"strike_count_3h":0,"precip_total_1h":0.0,"strike_last_dist":38,"strike_last_epoch":1679435903,"precip_accum_local_yesterday":0.0,"precip_accum_local_yesterday_final":0.0,"precip_analysis_type_yesterday":0,"raining_minutes":[0,0,0,0,0,0,0,0,0,0,0,0],"precip_minutes_local_day":0,"precip_minutes_local_yesterday":0},"obs":[[1681701838,3.71,4.31,5.2,298,3,722.8,null,null,5,0,0,0,0,0,0,2.45,1,0,0,0,0]]}`,
+			input: `{"status":{"status_code":0,"status_message":"SUCCESS"},"device_id":121037,"type":"obs_st","source":"cache","summary":{"pressure_trend":"steady","strike_count_1h":0,"strike_count_3h":0,"precip_total_1h":0.0,"strike_last_dist":38,"strike_last_epoch":1679435903,"precip_accum_local_yesterday":0.0,"precip_accum_local_yesterday_final":0.0,"precip_analysis_type_yesterday":0,"raining_minutes":[0,0,0,0,0,0,0,0,0,0,0,0],"precip_minutes_local_day":0,"precip_minutes_local_yesterday":0},"obs":[[1681701838,3.71,4.31,5.2,298,3,null,null,null,5,0,0,0,0,0,0,2.45,1,0,0,0,0]]}`,
 			want: &weatherflow.MessageObsSt{
 				Status: weatherflow.ObsStStatus{
 					StatusCode:    0,
@@ -47,7 +47,7 @@ func TestUnmarshalWeatherMessage(t *testing.T) {
 						WindGust:                        5.2,
 						WindDirection:                   298,
 						WindSampleInterval:              3,
-						StationPressure:                 722.8,
+						StationPressure:                 nil,
 						AirTemperature:                  nil,
 						RelativeHumidity:                nil,
 						Illuminance:                     5,

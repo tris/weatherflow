@@ -63,7 +63,7 @@ type ObsStData struct {
 	WindGust                        float64  `json:"wind_gust"`
 	WindDirection                   int      `json:"wind_direction"`
 	WindSampleInterval              int      `json:"wind_sample_interval"`
-	StationPressure                 float64  `json:"station_pressure"`
+	StationPressure                 *float64 `json:"station_pressure"`
 	AirTemperature                  *float64 `json:"air_temperature"`
 	RelativeHumidity                *float64 `json:"relative_humidity"`
 	Illuminance                     int      `json:"illuminance"`
@@ -100,7 +100,11 @@ func (obs *ObsStData) UnmarshalJSON(data []byte) error {
 	obs.WindGust = obsArray[3].(float64)
 	obs.WindDirection = int(obsArray[4].(float64))
 	obs.WindSampleInterval = int(obsArray[5].(float64))
-	obs.StationPressure = obsArray[6].(float64)
+
+	if obsArray[6] != nil {
+		staPressure := obsArray[6].(float64)
+		obs.StationPressure = &staPressure
+	}
 
 	if obsArray[7] != nil {
 		airTemp := obsArray[7].(float64)
